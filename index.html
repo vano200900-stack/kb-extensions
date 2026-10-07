@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Таблицы и схемы для базы знаний</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<script src="https://api.bitrix24.com/api/v1/"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --ink: #1E2B36;
+    --ink-2: #425466;
+    --surface: #F2F4F6;
+    --panel: #FFFFFF;
+    --line: #D5DCE2;
+    --accent: #1F7A8C;
+    --accent-ink: #FFFFFF;
+    --danger: #B4413C;
+    --font: "Golos Text", "Segoe UI", Arial, sans-serif;
+    --mono: "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 15px/1.5 var(--font); color: var(--ink); background: var(--surface); display: flex; flex-direction: column; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  header.bar { display: flex; align-items: center; gap: 16px; padding: 14px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header.bar h1 { font-size: 18px; font-weight: 600; margin: 0; }
+  header.bar .meta { color: var(--ink-2); font-size: 13px; }
+  header.bar .spacer { flex: 1; }
+
+  .btn { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+  .btn:hover { border-color: var(--ink-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { border-color: transparent; background: transparent; }
+  .btn:disabled { opacity: .5; cursor: default; }
+
+  main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view[hidden] { display: none !important; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .toolbar .group { display: flex; gap: 4px; align-items: center; padding-right: 10px; border-right: 1px solid var(--line); }
+  .toolbar .group:last-child { border-right: 0; }
+  .toolbar label { display: flex; align-items: center; gap: 6px; font-size: 14px; cursor: pointer; }
+  .toolbar select { border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--panel); }
+
+  /* Table editor */
+  .table-stage { flex: 1; overflow: auto; padding: 24px; }
+  .hint { color: var(--ink-2); font-size: 13px; margin: 0 0 12px; }
+  table.grid { border-collapse: collapse; background: var(--panel); min-width: 50%; }
+  table.grid td { border: 1px solid var(--line); min-width: 110px; padding: 8px 10px; vertical-align: top; white-space: pre-wrap; }
+  table.grid td.head { background: #E4EAEF; font-weight: 600; }
+  table.grid td.current { box-shadow: inset 0 0 0 2px var(--accent); }
+  table.grid td:focus { outline: none; }
+
+  /* Diagram editor */
+  .diagram-stage { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 40%) 1fr; }
+  .code-pane { display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--panel); min-height: 0; }
+  .code-pane textarea { flex: 1; border: 0; resize: none; padding: 16px 20px; font: 14px/1.6 var(--mono); background: var(--panel); min-height: 200px; }
+  .code-pane .error { color: var(--danger); font-size: 13px; padding: 8px 20px; border-top: 1px solid var(--line); min-height: 36px; }
+  .code-pane details { border-top: 1px solid var(--line); padding: 10px 20px; font-size: 13px; color: var(--ink-2); }
+  .code-pane details summary { cursor: pointer; color: var(--ink); }
+  .code-pane details code { font-family: var(--mono); background: var(--surface); padding: 1px 4px; border-radius: 3px; }
+  .preview { overflow: auto; padding: 32px; display: flex; align-items: flex-start; justify-content: center;
+    background-color: #EEF2F5;
+    background-image: radial-gradient(#C3CDD6 1px, transparent 1px);
+    background-size: 18px 18px; }
+  .preview svg { max-width: 100%; height: auto; background: #fff; padding: 16px; border: 1px solid var(--line); }
+
+  /* Setup */
+  .setup { max-width: 720px; margin: 40px auto; padding: 0 24px; }
+  .setup h2 { font-size: 26px; font-weight: 600; margin: 0 0 8px; line-height: 1.25; }
+  .setup p { color: var(--ink-2); margin: 0 0 16px; }
+  .setup ol { padding-left: 20px; color: var(--ink-2); }
+  .setup .actions { display: flex; gap: 10px; margin: 24px 0; }
+  .log { font: 13px/1.6 var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 16px; white-space: pre-wrap; min-height: 60px; }
+
+  dialog { border: 1px solid var(--line); border-radius: 8px; padding: 20px; width: min(520px, 92vw); }
+  dialog::backdrop { background: rgba(30, 43, 54, .35); }
+  dialog h3 { margin: 0 0 8px; font-size: 17px; }
+  dialog textarea { width: 100%; height: 180px; border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 6px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.err { background: var(--danger); }
+
+  @media (max-width: 760px) {
+    .diagram-stage { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    .code-pane { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <h1 id="title">Таблицы и схемы</h1>
+  <span class="meta" id="meta"></span>
+  <span class="spacer"></span>
+  <button class="btn ghost" id="btnCancel" hidden>Закрыть</button>
+  <button class="btn primary" id="btnSave" hidden>Сохранить в блок</button>
+</header>
+
+<main>
+  <!-- Установка -->
+  <section class="view setup" id="viewSetup" hidden>
+    <h2>Таблица и блок-схема для базы знаний</h2>
+    <p>Приложение добавляет в библиотеку блоков два новых блока. Их можно вставить на любую страницу базы знаний, а затем отредактировать в удобном редакторе.</p>
+    <ol>
+      <li>Нажмите «Установить блоки».</li>
+      <li>Откройте страницу базы знаний → «Добавить блок» → раздел «Текст»: там появятся «Таблица» и «Блок-схема».</li>
+      <li>У вставленного блока нажмите кнопку «Редактировать таблицу» или «Редактировать схему».</li>
+    </ol>
+    <div class="actions">
+      <button class="btn primary" id="btnInstall">Установить блоки</button>
+      <button class="btn" id="btnFinish" hidden>Завершить установку</button>
+    </div>
+    <div class="log" id="log">Готово к установке.</div>
+  </section>
+
+  <!-- Редактор таблицы -->
+  <section class="view" id="viewTable" hidden style="flex:1;display:flex;flex-direction:column;min-height:0">
+    <div class="toolbar">
+      <div class="group">
+        <button class="btn" data-act="row-above" title="Строка выше">+ строка выше</button>
+        <button class="btn" data-act="row-below" title="Строка ниже">+ строка ниже</button>
+        <button class="btn" data-act="row-del">Удалить строку</button>
+      </div>
+      <div class="group">
+        <button class="btn" data-act="col-left">+ столбец слева</button>
+        <button class="btn" data-act="col-right">+ столбец справа</button>
+        <button class="btn" data-act="col-del">Удалить столбец</button>
+      </div>
+      <div class="group">
+        <select id="colAlign" title="Выравнивание текущего столбца">
+          <option value="left">По левому краю</option>
+          <option value="center">По центру</option>
+          <option value="right">По правому краю</option>
+        </select>
+      </div>
+      <div class="group">
+        <label><input type="checkbox" id="optHeadRow" checked> Шапка</label>
+        <label><input type="checkbox" id="optHeadCol"> Первый столбец</label>
+      </div>
+      <div class="group">
+        <select id="optStyle" title="Оформление">
+          <option value="zebra">Зебра</option>
+          <option value="grid">Сетка</option>
+          <option value="minimal">Минимум</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-stage">
+      <p class="hint">Щёлкните в ячейку и печатайте. Можно вставить диапазон из Excel или Google Таблиц — он разложится по ячейкам начиная с выбранной.</p>
+      <table class="grid" id="grid"></table>
+    </div>
+  </section>
+
+  <!-- Редактор схемы -->
+  <section class="view" id="viewDiagram" hidden style="flex:1;display:flex;flex-direction:column;min-height:0">
+    <div class="toolbar">
+      <div class="group">
+        <select id="tpl" title="Шаблон">
+          <option value="">Шаблоны…</option>
+          <option value="process">Процесс с ветвлением</option>
+          <option value="lanes">Дорожки: кто что делает</option>
+          <option value="sequence">Диаграмма последовательности</option>
+          <option value="tree">Структура / дерево</option>
+        </select>
+        <button class="btn" id="btnSteps">Из списка шагов</button>
+      </div>
+      <div class="group">
+        <select id="theme" title="Цветовая тема">
+          <option value="brand">Тема: спокойная</option>
+          <option value="neutral">Тема: монохром</option>
+          <option value="default">Тема: стандартная</option>
+        </select>
+      </div>
+    </div>
+    <div class="diagram-stage">
+      <div class="code-pane">
+        <textarea id="code" spellcheck="false" aria-label="Описание схемы"></textarea>
+        <div class="error" id="err" role="status"></div>
+        <details>
+          <summary>Как описывать схему</summary>
+          <p><code>A[Действие]</code> — прямоугольник, <code>B{Вопрос?}</code> — ромб, <code>C([Начало])</code> — овал.<br>
+          <code>A --> B</code> — стрелка, <code>B -- Да --> C</code> — стрелка с подписью.<br>
+          Направление: <code>flowchart TD</code> — сверху вниз, <code>flowchart LR</code> — слева направо.</p>
+        </details>
+      </div>
+      <div class="preview" id="preview"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlgSteps">
+  <h3>Схема из списка шагов</h3>
+  <p class="hint">Каждая строка — шаг. Строка, оканчивающаяся на «?», станет ромбом-вопросом.</p>
+  <textarea id="stepsText">Принять обращение
+Проверить бронирование
+Бронирование найдено?
+Решить вопрос клиента
+Зафиксировать результат в карточке</textarea>
+  <div class="row">
+    <button class="btn ghost" id="stepsCancel">Отмена</button>
+    <button class="btn primary" id="stepsOk">Построить схему</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ============================================================
+   Общие утилиты
+   ============================================================ */
+const $ = (s) => document.querySelector(s);
+const IN_B24 = typeof BX24 !== 'undefined' && window.top !== window.self;
+const OPT_IDS = 'kbext_ids';
+
+function toast(msg, isErr) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isErr ? ' err' : '');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => (t.className = 'toast'), 3500);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function call(method, params) {
+  return new Promise((resolve, reject) => {
+    BX24.callMethod(method, params || {}, (r) => {
+      if (r.error()) reject(new Error(r.error().ex ? (r.error().ex.error_description || r.error().ex.error) : String(r.error())));
+      else resolve(r.data());
+    });
+  });
+}
+
+/* Для страниц базы знаний часть методов landing.* требует параметр scope.
+   Пробуем без него, затем с 'knowledge' и 'group' (база знаний группы). */
+async function callScoped(method, params) {
+  let firstErr;
+  for (const scope of [null, 'knowledge', 'group']) {
+    try {
+      return await call(method, scope ? Object.assign({}, params, { scope }) : params);
+    } catch (e) { if (!firstErr) firstErr = e; }
+  }
+  throw firstErr;
+}
+
+async function optGet(key) {
+  try {
+    const v = await call('app.option.get', { option: key });
+    return v ? JSON.parse(v) : null;
+  } catch (e) { return null; }
+}
+function optSet(key, value) {
+  return call('app.option.set', { options: { [key]: JSON.stringify(value) } });
+}
+
+function placementCall(cmd, params) {
+  return new Promise((res) => BX24.placement.call(cmd, params, res));
+}
+
+/* ============================================================
+   Описание блоков, которые регистрируются в библиотеке
+   ============================================================ */
+const APP_BASE = new URL('.', location.href.split('?')[0]).href;
+const HANDLER = location.href.split('?')[0];
+
+const BLOCKS = {
+  table: {
+    code: 'kbext_table',
+    name: 'Таблица',
+    button: 'Редактировать таблицу',
+    preview: 'preview-table.svg',
+    content: () => renderTableBlock(defaultTableState()),
+    manifest: {
+      block: { name: 'Таблица', section: ['text'], type: ['page', 'store', 'knowledge', 'group'] },
+      nodes: { '.kbext-cell': { name: 'Ячейка', type: 'text' } }
+    }
+  },
+  diagram: {
+    code: 'kbext_diagram',
+    name: 'Блок-схема',
+    button: 'Редактировать схему',
+    preview: 'preview-diagram.svg',
+    content: () =>
+      '<section class="landing-block g-pt-30 g-pb-30"><div class="container">' +
+      '<div class="kbext-diagram" style="text-align:center;">' +
+      '<img class="kbext-diagram-img" src="' + APP_BASE + 'placeholder.svg" alt="Блок-схема" style="max-width:100%;height:auto;">' +
+      '</div></div></section>',
+    manifest: {
+      block: { name: 'Блок-схема', section: ['text'], type: ['page', 'store', 'knowledge', 'group'] },
+      nodes: { '.kbext-diagram-img': { name: 'Схема', type: 'img' } }
+    }
+  }
+};
+
+/* ============================================================
+   Установка
+   ============================================================ */
+function log(line) { const l = $('#log'); l.textContent += '\n' + line; }
+
+async function installBlocks() {
+  $('#btnInstall').disabled = true;
+  $('#log').textContent = 'Установка…';
+  const ids = {};
+  try {
+    for (const [type, def] of Object.entries(BLOCKS)) {
+      const id = await call('landing.repo.register', {
+        code: def.code,
+        fields: {
+          NAME: def.name,
+          DESCRIPTION: def.name + ' — редактируется в приложении',
+          SECTIONS: 'text',
+          PREVIEW: APP_BASE + def.preview,
+          CONTENT: def.content(),
+          RESET: 'Y'
+        },
+        manifest: def.manifest
+      });
+      ids[type] = id;
+      log('✓ Блок «' + def.name + '» зарегистрирован, ID ' + id);
+
+      // Кнопка в меню блока. Документация допускает разные форматы кода — регистрируем оба.
+      let bound = false;
+      for (const placement of ['LANDING_BLOCK_repo_' + id, 'LANDING_BLOCK_' + id]) {
+        try {
+          await call('landing.repo.bind', { fields: { PLACEMENT: placement, PLACEMENT_HANDLER: HANDLER, TITLE: def.button } });
+          bound = true;
+          log('  кнопка «' + def.button + '» → ' + placement);
+        } catch (e) { /* формат не подошёл — пробуем следующий */ }
+      }
+      if (!bound) log('  ! Не удалось добавить кнопку редактирования. Проверьте права приложения (scope: landing).');
+    }
+    await optSet(OPT_IDS, ids);
+    log('\nГотово. Теперь блоки доступны в разделе «Текст» библиотеки блоков.');
+    $('#btnFinish').hidden = false;
+  } catch (e) {
+    log('✗ Ошибка: ' + e.message);
+  } finally {
+    $('#btnInstall').disabled = false;
+    $('#btnInstall').textContent = 'Установить заново';
+  }
+}
+
+/* ============================================================
+   Редактор таблицы
+   ============================================================ */
+let T = null;            // состояние таблицы
+let cur = { r: 0, c: 0 }; // текущая ячейка
+
+function defaultTableState() {
+  return {
+    headRow: true, headCol: false, style: 'zebra',
+    align: ['left', 'left', 'left'],
+    rows: [
+      ['Ситуация', 'Действие оператора', 'Срок'],
+      ['Клиент не получил ваучер', 'Проверить статус брони и отправить ваучер повторно', '15 минут'],
+      ['Изменение дат тура', 'Запросить возможность у туроператора', '1 рабочий день']
+    ]
+  };
+}
+
+const STYLES = {
+  zebra: {
+    th: 'background:#2F3E4C;color:#ffffff;font-weight:600;border-bottom:1px solid #2F3E4C;',
+    td: 'border-bottom:1px solid #DDE3E8;',
+    stripe: '#F5F7F9', colHead: 'background:#EEF2F5;font-weight:600;'
+  },
+  grid: {
+    th: 'background:#EEF2F5;font-weight:600;border:1px solid #C9D1D9;',
+    td: 'border:1px solid #C9D1D9;',
+    stripe: null, colHead: 'background:#F6F8FA;font-weight:600;'
+  },
+  minimal: {
+    th: 'font-weight:600;border-bottom:2px solid #1E2B36;',
+    td: 'border-bottom:1px solid #E6EAEE;',
+    stripe: null, colHead: 'font-weight:600;'
+  }
+};
+
+/* HTML, который попадает в блок. Только инлайн-стили — так оформление переживёт санитайзер. */
+function renderTableBlock(s) {
+  const st = STYLES[s.style] || STYLES.zebra;
+  const base = 'padding:10px 14px;vertical-align:top;';
+  let html = '<section class="landing-block g-pt-30 g-pb-30"><div class="container">' +
+    '<div class="kbext-table-wrap" style="overflow-x:auto;">' +
+    '<table class="kbext-table" style="width:100%;border-collapse:collapse;font-size:15px;line-height:1.5;">';
+  s.rows.forEach((row, r) => {
+    const isHead = s.headRow && r === 0;
+    if (isHead) html += '<thead>';
+    if (r === (s.headRow ? 1 : 0)) html += '<tbody>';
+    const bg = !isHead && st.stripe && ((r - (s.headRow ? 1 : 0)) % 2 === 1) ? 'background:' + st.stripe + ';' : '';
+    html += '<tr>';
+    row.forEach((text, c) => {
+      const align = 'text-align:' + (s.align[c] || 'left') + ';';
+      const cell = esc(text).replace(/\n/g, '<br>');
+      if (isHead) html += '<th class="kbext-cell" style="' + base + align + st.th + '">' + cell + '</th>';
+      else if (s.headCol && c === 0) html += '<td class="kbext-cell" style="' + base + align + bg + st.td + st.colHead + '">' + cell + '</td>';
+      else html += '<td class="kbext-cell" style="' + base + align + bg + st.td + '">' + cell + '</td>';
+    });
+    html += '</tr>';
+    if (isHead) html += '</thead>';
+  });
+  if (s.rows.length) html += '</tbody>';
+  html += '</table></div></div></section>';
+  return html;
+}
+
+/* Читаем таблицу из текущего содержимого блока — чтобы не потерять правки, сделанные прямо в редакторе страницы. */
+function parseTableFromHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const table = doc.querySelector('table');
+  if (!table) return null;
+  const rows = [...table.querySelectorAll('tr')].map((tr) =>
+    [...tr.children].map((cell) => {
+      cell.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+      return cell.textContent.trim();
+    })
+  );
+  if (!rows.length) return null;
+  const width = Math.max(...rows.map((r) => r.length));
+  rows.forEach((r) => { while (r.length < width) r.push(''); });
+  return rows;
+}
+
+function drawGrid() {
+  const g = $('#grid');
+  g.innerHTML = '';
+  T.rows.forEach((row, r) => {
+    const tr = document.createElement('tr');
+    row.forEach((text, c) => {
+      const td = document.createElement('td');
+      td.contentEditable = 'plaintext-only';
+      td.textContent = text;
+      td.style.textAlign = T.align[c] || 'left';
+      if ((T.headRow && r === 0) || (T.headCol && c === 0)) td.classList.add('head');
+      if (r === cur.r && c === cur.c) td.classList.add('current');
+      td.addEventListener('focus', () => { setCurrent(r, c); });
+      td.addEventListener('input', () => { T.rows[r][c] = td.innerText.replace(/\n$/, ''); });
+      td.addEventListener('paste', (e) => onPaste(e, r, c));
+      tr.appendChild(td);
+    });
+    g.appendChild(tr);
+  });
+}
+
+function setCurrent(r, c) {
+  cur = { r, c };
+  document.querySelectorAll('#grid td.current').forEach((td) => td.classList.remove('current'));
+  const td = $('#grid').rows[r] && $('#grid').rows[r].cells[c];
+  if (td) td.classList.add('current');
+  $('#colAlign').value = T.align[c] || 'left';
+}
+
+function focusCell(r, c) {
+  r = Math.max(0, Math.min(r, T.rows.length - 1));
+  c = Math.max(0, Math.min(c, T.rows[0].length - 1));
+  const td = $('#grid').rows[r].cells[c];
+  td.focus();
+  setCurrent(r, c);
+}
+
+function onPaste(e, r0, c0) {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!/[\t\n]/.test(text.replace(/\n$/, ''))) return; // одиночный текст — обычная вставка
+  e.preventDefault();
+  const lines = text.replace(/\r/g, '').replace(/\n$/, '').split('\n').map((l) => l.split('\t'));
+  const needRows = r0 + lines.length, needCols = c0 + Math.max(...lines.map((l) => l.length));
+  while (T.rows.length < needRows) T.rows.push(Array(T.rows[0].length).fill(''));
+  while (T.rows[0].length < needCols) { T.rows.forEach((row) => row.push('')); T.align.push('left'); }
+  lines.forEach((l, i) => l.forEach((v, j) => { T.rows[r0 + i][c0 + j] = v.trim(); }));
+  drawGrid();
+  focusCell(r0, c0);
+  toast('Вставлено ' + lines.length + ' × ' + Math.max(...lines.map((l) => l.length)));
+}
+
+function tableAction(act) {
+  const cols = T.rows[0].length;
+  const { r, c } = cur;
+  switch (act) {
+    case 'row-above': T.rows.splice(r, 0, Array(cols).fill('')); break;
+    case 'row-below': T.rows.splice(r + 1, 0, Array(cols).fill('')); cur.r++; break;
+    case 'row-del': if (T.rows.length > 1) T.rows.splice(r, 1); break;
+    case 'col-left': T.rows.forEach((row) => row.splice(c, 0, '')); T.align.splice(c, 0, 'left'); break;
+    case 'col-right': T.rows.forEach((row) => row.splice(c + 1, 0, '')); T.align.splice(c + 1, 0, 'left'); cur.c++; break;
+    case 'col-del': if (cols > 1) { T.rows.forEach((row) => row.splice(c, 1)); T.align.splice(c, 1); } break;
+  }
+  drawGrid();
+  focusCell(cur.r, cur.c);
+}
+
+async function initTable(ctx) {
+  T = (ctx && (await optGet('kbext_t_' + ctx.blockId))) || defaultTableState();
+  if (ctx) {
+    try {
+      const data = await callScoped('landing.block.getcontent', { lid: ctx.lid, block: ctx.blockId, editMode: 1 });
+      const rows = parseTableFromHtml(data.content || '');
+      if (rows) {
+        T.rows = rows;
+        while (T.align.length < rows[0].length) T.align.push('left');
+        T.align.length = rows[0].length;
+      }
+    } catch (e) { console.warn('getcontent:', e); }
+  }
+  $('#optHeadRow').checked = T.headRow;
+  $('#optHeadCol').checked = T.headCol;
+  $('#optStyle').value = T.style;
+  drawGrid();
+  setCurrent(0, 0);
+
+  document.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => tableAction(b.dataset.act)));
+  $('#colAlign').addEventListener('change', (e) => { T.align[cur.c] = e.target.value; drawGrid(); focusCell(cur.r, cur.c); });
+  $('#optHeadRow').addEventListener('change', (e) => { T.headRow = e.target.checked; drawGrid(); });
+  $('#optHeadCol').addEventListener('change', (e) => { T.headCol = e.target.checked; drawGrid(); });
+  $('#optStyle').addEventListener('change', (e) => { T.style = e.target.value; });
+  $('#grid').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const cols = T.rows[0].length;
+      let i = cur.r * cols + cur.c + (e.shiftKey ? -1 : 1);
+      if (i >= T.rows.length * cols) { T.rows.push(Array(cols).fill('')); drawGrid(); }
+      i = Math.max(0, i);
+      focusCell(Math.floor(i / cols), i % cols);
+    }
+  });
+}
+
+async function saveTable(ctx) {
+  const html = renderTableBlock(T);
+  await callScoped('landing.block.updatecontent', { lid: ctx.lid, block: ctx.blockId, content: html });
+  await optSet('kbext_t_' + ctx.blockId, { headRow: T.headRow, headCol: T.headCol, style: T.style, align: T.align });
+}
+
+/* ============================================================
+   Редактор блок-схемы
+   ============================================================ */
+const TEMPLATES = {
+  process: `flowchart TD
+    A([Начало]) --> B[Принять обращение]
+    B --> C{Клиент авторизован?}
+    C -- Да --> D[Найти бронирование]
+    C -- Нет --> E[Запросить номер заказа]
+    E --> D
+    D --> F[Решить вопрос]
+    F --> G([Конец])`,
+  lanes: `flowchart LR
+    subgraph Клиент
+      a1[Оставляет заявку]
+    end
+    subgraph Оператор
+      b1[Проверяет данные] --> b2{Всё верно?}
+    end
+    subgraph Туроператор
+      c1[Подтверждает тур]
+    end
+    a1 --> b1
+    b2 -- Да --> c1
+    b2 -- Нет --> a1`,
+  sequence: `sequenceDiagram
+    participant К as Клиент
+    participant О as Оператор
+    participant Т as Туроператор
+    К->>О: Просит изменить даты
+    О->>Т: Запрос на изменение
+    Т-->>О: Подтверждение и доплата
+    О-->>К: Новые условия`,
+  tree: `flowchart TD
+    R[Отдел клиентского сервиса]
+    R --> A[Первая линия]
+    R --> B[Вторая линия]
+    R --> C[Группа наставников]
+    A --> A1[Чаты]
+    A --> A2[Звонки]
+    B --> B1[Сложные кейсы]`
+};
+
+const THEMES = {
+  brand: {
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '15px',
+      primaryColor: '#E6F2F4', primaryBorderColor: '#1F7A8C', primaryTextColor: '#1E2B36',
+      lineColor: '#425466', secondaryColor: '#F2F4F6', tertiaryColor: '#FFFFFF',
+      clusterBkg: '#F6F8FA', clusterBorder: '#C3CDD6'
+    }
+  },
+  neutral: { theme: 'neutral', themeVariables: { fontFamily: 'Arial, Helvetica, sans-serif' } },
+  default: { theme: 'default', themeVariables: { fontFamily: 'Arial, Helvetica, sans-serif' } }
+};
+
+let D = { code: TEMPLATES.process, theme: 'brand' };
+let lastSvg = '';
+let renderSeq = 0;
+
+function setupMermaid() {
+  const t = THEMES[D.theme] || THEMES.brand;
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: t.theme,
+    themeVariables: t.themeVariables,
+    htmlLabels: false,                      // без foreignObject — иначе PNG не собрать
+    flowchart: { htmlLabels: false, curve: 'basis' }
+  });
+}
+
+async function renderDiagram() {
+  const seq = ++renderSeq;
+  const code = $('#code').value;
+  try {
+    await mermaid.parse(code);
+    const { svg } = await mermaid.render('m' + seq, code);
+    if (seq !== renderSeq) return;
+    $('#preview').innerHTML = svg;
+    lastSvg = svg;
+    $('#err').textContent = '';
+  } catch (e) {
+    if (seq !== renderSeq) return;
+    document.querySelectorAll('[id^="dm"]').forEach((n) => n.remove());
+    $('#err').textContent = 'Схема не построена: ' + String(e.message || e).split('\n')[0];
+  }
+}
+
+async function svgToPngBase64(svgStr, scale) {
+  const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+  const svg = doc.documentElement;
+  const vb = (svg.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+  const w = Math.ceil(vb[2] || svg.getBoundingClientRect().width || 800);
+  const h = Math.ceil(vb[3] || 600);
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.removeAttribute('style');
+  const str = new XMLSerializer().serializeToString(svg);
+  if (str.includes('<foreignObject')) throw new Error('Этот тип схемы нельзя сохранить картинкой. Используйте flowchart или sequenceDiagram.');
+
+  const img = new Image();
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(str);
+  await img.decode();
+  const pad = 24;
+  const canvas = document.createElement('canvas');
+  canvas.width = (w + pad * 2) * scale;
+  canvas.height = (h + pad * 2) * scale;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(scale, scale);
+  ctx.drawImage(img, pad, pad, w, h);
+  return canvas.toDataURL('image/png').split(',')[1];
+}
+
+function stepsToMermaid(text) {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const q = (s) => '"' + s.replace(/"/g, '#quot;') + '"';
+  let out = 'flowchart TD\n    s0([Начало])';
+  let prev = 's0', prevIsQuestion = false;
+  lines.forEach((l, i) => {
+    const id = 's' + (i + 1);
+    const node = l.endsWith('?') ? id + '{' + q(l) + '}' : id + '[' + q(l) + ']';
+    out += '\n    ' + prev + (prevIsQuestion ? ' -- Да --> ' : ' --> ') + node;
+    prev = id; prevIsQuestion = l.endsWith('?');
+  });
+  out += '\n    ' + prev + (prevIsQuestion ? ' -- Да --> ' : ' --> ') + 'e([Конец])';
+  return out;
+}
+
+async function initDiagram(ctx) {
+  const saved = ctx && (await optGet('kbext_d_' + ctx.blockId));
+  if (saved) D = Object.assign(D, saved);
+  $('#code').value = D.code;
+  $('#theme').value = D.theme;
+  setupMermaid();
+  renderDiagram();
+
+  let h;
+  $('#code').addEventListener('input', () => { clearTimeout(h); h = setTimeout(renderDiagram, 350); });
+  $('#code').addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') { // Tab вставляет отступ, а не уводит фокус
+      e.preventDefault();
+      const t = e.target, s = t.selectionStart;
+      t.setRangeText('    ', s, t.selectionEnd, 'end');
+      t.dispatchEvent(new Event('input'));
+    }
+  });
+  $('#tpl').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    $('#code').value = TEMPLATES[e.target.value];
+    e.target.value = '';
+    renderDiagram();
+  });
+  $('#theme').addEventListener('change', (e) => { D.theme = e.target.value; setupMermaid(); renderDiagram(); });
+  $('#btnSteps').addEventListener('click', () => $('#dlgSteps').showModal());
+  $('#stepsCancel').addEventListener('click', () => $('#dlgSteps').close());
+  $('#stepsOk').addEventListener('click', () => {
+    $('#code').value = stepsToMermaid($('#stepsText').value);
+    $('#dlgSteps').close();
+    renderDiagram();
+  });
+}
+
+async function saveDiagram(ctx) {
+  await renderDiagram();
+  if ($('#err').textContent) throw new Error('Сначала исправьте ошибку в описании схемы.');
+  const b64 = await svgToPngBase64(lastSvg, 2);
+  const file = await callScoped('landing.block.uploadfile', { block: ctx.blockId, picture: ['diagram-' + Date.now() + '.png', b64] });
+  await callScoped('landing.block.updatenodes', {
+    lid: ctx.lid, block: ctx.blockId,
+    data: { '.kbext-diagram-img': { src: file.src, id: file.id, alt: 'Блок-схема' } }
+  });
+  await optSet('kbext_d_' + ctx.blockId, { code: $('#code').value, theme: D.theme });
+}
+
+/* ============================================================
+   Маршрутизация: установка / редактор блока / демо вне Битрикс24
+   ============================================================ */
+function show(view) {
+  ['#viewSetup', '#viewTable', '#viewDiagram'].forEach((v) => ($(v).hidden = v !== view));
+}
+
+async function openEditor(type, ctx) {
+  $('#btnSave').hidden = false;
+  $('#btnCancel').hidden = !ctx;
+  if (type === 'table') { $('#title').textContent = 'Таблица'; show('#viewTable'); await initTable(ctx); }
+  else { $('#title').textContent = 'Блок-схема'; show('#viewDiagram'); await initDiagram(ctx); }
+  if (ctx) $('#meta').textContent = 'блок #' + ctx.blockId;
+
+  $('#btnCancel').addEventListener('click', () => BX24.closeApplication());
+  $('#btnSave').addEventListener('click', async () => {
+    if (!ctx) { toast('Демо-режим: сохранение работает только внутри Битрикс24'); return; }
+    const btn = $('#btnSave');
+    btn.disabled = true; btn.textContent = 'Сохраняю…';
+    try {
+      if (type === 'table') await saveTable(ctx); else await saveDiagram(ctx);
+      await placementCall('refreshBlock', { id: ctx.blockId });
+      toast('Сохранено в блок');
+    } catch (e) {
+      toast('Не сохранено: ' + e.message, true);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Сохранить в блок';
+    }
+  });
+}
+
+async function detectType(ctx) {
+  const ids = (await optGet(OPT_IDS)) || {};
+  const code = String(ctx.code || '');
+  if (ids.table && code.endsWith('_' + ids.table) || code === String(ids.table)) return 'table';
+  if (ids.diagram && code.endsWith('_' + ids.diagram) || code === String(ids.diagram)) return 'diagram';
+  try { // запасной путь — смотрим разметку блока
+    const data = await callScoped('landing.block.getcontent', { lid: ctx.lid, block: ctx.blockId, editMode: 1 });
+    if ((data.content || '').includes('kbext-diagram')) return 'diagram';
+  } catch (e) { /* ignore */ }
+  return 'table';
+}
+
+if (IN_B24) {
+  BX24.init(async () => {
+    const info = BX24.placement.info();
+    const place = info.placement || 'DEFAULT';
+    if (place.startsWith('LANDING_BLOCK_')) {
+      const o = info.options || {};
+      const ctx = { blockId: Number(o.ID), lid: Number(o.LID), code: o.CODE };
+      BX24.resizeWindow(document.body.scrollWidth, Math.max(640, window.innerHeight));
+      openEditor(await detectType(ctx), ctx);
+    } else {
+      show('#viewSetup');
+      const ids = await optGet(OPT_IDS);
+      if (ids) $('#log').textContent = 'Блоки уже установлены (ID ' + Object.values(ids).join(', ') + '). Переустановка обновит их на всех страницах.';
+      $('#btnInstall').addEventListener('click', installBlocks);
+      $('#btnFinish').addEventListener('click', () => BX24.installFinish());
+    }
+  });
+} else {
+  // Открыто вне Битрикс24 — показываем редакторы для проверки
+  const type = new URLSearchParams(location.search).get('demo') === 'diagram' ? 'diagram' : 'table';
+  $('#meta').innerHTML = 'демо-режим · <a href="?demo=table">таблица</a> · <a href="?demo=diagram">схема</a>';
+  openEditor(type, null);
+}
+</script>
+</body>
+</html>
